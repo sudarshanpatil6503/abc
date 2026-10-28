@@ -1,0 +1,9 @@
+Campus Notices – Demo Data
+
+Exam Notice: Internal Assessment – The second internal assessment is scheduled as per the department timetable. Students should verify the final room and time from the official department notice.
+
+Holiday Notice: The institution will publish holiday and working-day changes through the official notice board or student portal.
+
+Placement Notice: Students attending placement drives must verify company-specific eligibility, registration deadline and assessment instructions from the official placement cell.
+
+Project Review Notice: Final-year project review schedules will be communicated by the department project coordinator.
