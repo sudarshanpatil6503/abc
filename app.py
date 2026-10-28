@@ -94,3 +94,34 @@ def load_documents():
             continue
 
         try:
+            with open(path, "r", encoding="utf-8") as file:
+                content = file.read().strip()
+
+            if content:
+                docs.append({"name": filename, "text": content})
+        except (OSError, UnicodeDecodeError):
+            # Skip unreadable files rather than crashing the whole app.
+            continue
+
+    return docs
+
+
+DOCS = load_documents()
+VECTORIZER = None
+MATRIX = None
+
+if DOCS:
+    try:
+        vectorizer = TfidfVectorizer(stop_words="english")
+        matrix = vectorizer.fit_transform([doc["text"] for doc in DOCS])
+        VECTORIZER = vectorizer
+        MATRIX = matrix
+    except ValueError:
+        # For example, documents may contain no usable words.
+        VECTORIZER = None
+        MATRIX = None
+
+
+def retrieve(query, k=3):
+    if MATRIX is None or VECTORIZER is None or not query.strip():
+        return []
