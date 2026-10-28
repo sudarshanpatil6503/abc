@@ -1,25 +1,19 @@
+import ast
 import json
+import operator
 import os
 import re
+from pathlib import Path
 
 import streamlit as st
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
 
-# ---------------------------------------------------------------------------
-# Paths and page configuration
-# ---------------------------------------------------------------------------
-BASE = os.path.dirname(os.path.abspath(__file__))
-DATA_CANDIDATES = [
-    os.path.join(BASE, "data"),
-    BASE,
-]
-DATA = next(
-    (path for path in DATA_CANDIDATES if os.path.isdir(path)),
-    os.path.join(BASE, "data"),
-)
-MEMORY_FILE = os.path.join(BASE, "memory.json")
+# ----------------------------- Configuration -----------------------------
+BASE_DIR = Path(__file__).resolve().parent
+DATA_DIR = BASE_DIR / "data"
+MEMORY_FILE = BASE_DIR / "memory.json"
 
 st.set_page_config(
     page_title="CampusMate AI",
@@ -28,82 +22,68 @@ st.set_page_config(
 )
 
 
-# ---------------------------------------------------------------------------
-# Student memory
-# ---------------------------------------------------------------------------
+# ----------------------------- Student memory ----------------------------
 def load_memory():
-    default_memory = {
+    defaults = {
         "student_name": "",
         "department": "",
         "year": "",
         "history": [],
     }
 
-    if os.path.isfile(MEMORY_FILE):
-        try:
-            with open(MEMORY_FILE, "r", encoding="utf-8") as file:
-                loaded = json.load(file)
+    if not MEMORY_FILE.is_file():
+        return defaults
 
-            if not isinstance(loaded, dict):
-                return default_memory
+    try:
+        with MEMORY_FILE.open("r", encoding="utf-8") as file:
+            stored = json.load(file)
 
-            # Keep expected fields even if an older/incomplete JSON file exists.
-            for key, default_value in default_memory.items():
-                if key not in loaded or not isinstance(loaded[key], type(default_value)):
-                    loaded[key] = default_value
+        if not isinstance(stored, dict):
+            return defaults
 
-            return loaded
-        except (OSError, json.JSONDecodeError):
-            pass
-
-    return default_memory
+        for key, default_value in defaults.items():
+            if key not in stored or not isinstance(stored[key], type(default_value)):
+                stored[key] = default_value
+        return stored
+    except (OSError, json.JSONDecodeError):
+        return defaults
 
 
 def save_memory(memory):
-    """Save memory where the app has write access."""
+    """Best-effort local JSON persistence; hosted filesystems may be ephemeral."""
     try:
-        with open(MEMORY_FILE, "w", encoding="utf-8") as file:
+        with MEMORY_FILE.open("w", encoding="utf-8") as file:
             json.dump(memory, file, indent=2, ensure_ascii=False)
         return True
-    except OSError as error:
-        st.warning(f"Memory could not be saved on this deployment: {error}")
+    except OSError:
         return False
 
 
-# ---------------------------------------------------------------------------
-# Campus document loading and retrieval (RAG)
-# ---------------------------------------------------------------------------
+# ----------------------------- Campus documents --------------------------
 def load_documents():
-    """Load non-empty .txt files from the data folder or project root."""
-    docs = []
+    """Read non-empty .txt files from data/. Missing data is not fatal."""
+    documents = []
 
-    if not os.path.isdir(DATA):
-        return docs
+    if not DATA_DIR.is_dir():
+        return documents
 
     try:
-        filenames = sorted(os.listdir(DATA))
+        paths = sorted(DATA_DIR.glob("*.txt"))
     except OSError:
-        return docs
+        return documents
 
-    for filename in filenames:
-        if not filename.lower().endswith(".txt"):
+    for path in paths:
+        if not path.is_file():
             continue
-
-        path = os.path.join(DATA, filename)
-        if not os.path.isfile(path):
-            continue
-
         try:
-            with open(path, "r", encoding="utf-8") as file:
-                content = file.read().strip()
-
-            if content:
-                docs.append({"name": filename, "text": content})
+            text = path.read_text(encoding="utf-8").strip()
         except (OSError, UnicodeDecodeError):
-            # Skip unreadable files rather than crashing the whole app.
             continue
 
-    return docs
+        if text:
+            documents.append({"name": path.name, "text": text})
+
+    return documents
 
 
 DOCS = load_documents()
@@ -112,16 +92,5 @@ MATRIX = None
 
 if DOCS:
     try:
-        vectorizer = TfidfVectorizer(stop_words="english")
-        matrix = vectorizer.fit_transform([doc["text"] for doc in DOCS])
-        VECTORIZER = vectorizer
-        MATRIX = matrix
-    except ValueError:
-        # For example, documents may contain no usable words.
-        VECTORIZER = None
-        MATRIX = None
-
-
-def retrieve(query, k=3):
-    if MATRIX is None or VECTORIZER is None or not query.strip():
-        return []
+        candidate_vectorizer = TfidfVectorizer(stop_words="english")
+        candidate_matrix = candidate_vectorizer.fit_transform(
