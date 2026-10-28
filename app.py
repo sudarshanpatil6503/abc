@@ -4,10 +4,15 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
 BASE = os.path.dirname(__file__)
-DATA = os.path.join(BASE, "data")
+DATA_CANDIDATES = [
+    os.path.join(BASE, "data"),
+    BASE,
+]
+DATA = next((path for path in DATA_CANDIDATES if os.path.isdir(path)), os.path.join(BASE, "data"))
 MEMORY_FILE = os.path.join(BASE, "memory.json")
 
 st.set_page_config(page_title="CampusMate AI", page_icon="🎓", layout="centered")
+
 
 def load_memory():
     if os.path.exists(MEMORY_FILE):
@@ -18,33 +23,49 @@ def load_memory():
             pass
     return {"student_name": "", "department": "", "year": "", "history": []}
 
+
 def save_memory(memory):
     with open(MEMORY_FILE, "w", encoding="utf-8") as f:
         json.dump(memory, f, indent=2)
 
+
 def load_documents():
     docs = []
+    if not os.path.isdir(DATA):
+        return docs
+
     for fn in sorted(os.listdir(DATA)):
-        if fn.endswith(".txt"):
-            with open(os.path.join(DATA, fn), "r", encoding="utf-8") as f:
-                docs.append({"name": fn, "text": f.read()})
+        if fn.lower().endswith(".txt"):
+            path = os.path.join(DATA, fn)
+            if os.path.isfile(path):
+                with open(path, "r", encoding="utf-8") as f:
+                    docs.append({"name": fn, "text": f.read()})
     return docs
+
 
 DOCS = load_documents()
 VECTORIZER = TfidfVectorizer(stop_words="english")
-MATRIX = VECTORIZER.fit_transform([d["text"] for d in DOCS])
+MATRIX = VECTORIZER.fit_transform([d["text"] for d in DOCS]) if DOCS else None
+
 
 def retrieve(query, k=3):
+    if MATRIX is None:
+        return []
     q = VECTORIZER.transform([query])
     scores = cosine_similarity(q, MATRIX)[0]
     order = scores.argsort()[::-1][:k]
     return [(DOCS[i], float(scores[i])) for i in order if scores[i] > 0.05]
 
+
 def find_notice(keyword):
     path = os.path.join(DATA, "notices.txt")
-    text = open(path, encoding="utf-8").read()
+    if not os.path.isfile(path):
+        return []
+    with open(path, encoding="utf-8") as f:
+        text = f.read()
     lines = [x.strip() for x in text.splitlines() if keyword.lower() in x.lower()]
     return lines
+
 
 def calculator(expression):
     if not re.fullmatch(r"[0-9+\-*/(). %]+", expression.strip()):
@@ -53,6 +74,7 @@ def calculator(expression):
         return str(eval(expression, {"__builtins__": {}}, {}))
     except Exception:
         return "I could not calculate that expression."
+
 
 def agent_answer(query, memory):
     q = query.lower().strip()
@@ -105,6 +127,7 @@ def agent_answer(query, memory):
     answer = "🎓 **CampusMate AI**\n\n" + "\n\n".join(f"• {s}" for s in selected)
     answer += "\n\n_Answer generated from the campus knowledge base (RAG)._"
     return answer, [(doc["name"], round(score, 3)) for doc, score in results]
+
 
 if "memory" not in st.session_state:
     st.session_state.memory = load_memory()
