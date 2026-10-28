@@ -1,0 +1,9 @@
+Sample AI and Computer Science Course Syllabus
+Module 1: Introduction to Artificial Intelligence, intelligent agents and problem solving.
+Module 2: Machine learning fundamentals, supervised learning and unsupervised learning.
+Module 3: Natural language processing and information retrieval.
+Module 4: Generative AI, retrieval-augmented generation and prompt engineering.
+Module 5: Agentic AI, tool calling, memory and responsible AI.
+
+Sample Computer Science Support Topics
+Programming fundamentals, data structures, database management systems, operating systems, computer networks, software engineering and web/mobile application development.
